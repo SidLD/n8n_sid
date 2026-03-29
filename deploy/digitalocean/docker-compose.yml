@@ -1,0 +1,84 @@
+# DigitalOcean VPS: n8n (SQLite under /home/node/.n8n) + nginx (80/443).
+# Secrets live only in deploy/digitalocean/.env (gitignored). Compose loads it automatically
+# for this file’s directory — no need for --env-file when using -f deploy/digitalocean/docker-compose.yml
+
+services:
+  n8n:
+    image: ${N8N_IMAGE:-docker.n8n.io/n8nio/n8n:latest}
+    restart: unless-stopped
+    # Inject every variable from the host .env next to this compose file (keeps N8N_ENCRYPTION_KEY etc. out of the image).
+    env_file:
+      - .env
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?set N8N_ENCRYPTION_KEY in .env}
+      N8N_HOST: ${N8N_HOST:?set N8N_HOST in .env}
+      # Behind nginx: n8n must listen HTTP on 5678. Do not set N8N_PORT=443 in .env for this layout.
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: http
+      N8N_PROXY_HOPS: "1"
+      # Default http:// — on VPS set WEBHOOK_URL / N8N_EDITOR_BASE_URL to https://your-domain/
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://${N8N_HOST}/}
+      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL:-http://${N8N_HOST}}
+      TZ: ${TZ:-UTC}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
+      # Default DB is SQLite at ~/.n8n/database.sqlite (no Postgres).
+      # Trim execution history + binary payloads so uploads (e.g. images) do not linger.
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: ${EXECUTIONS_DATA_MAX_AGE:-24}
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: ${EXECUTIONS_DATA_PRUNE_MAX_COUNT:-100}
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: ${EXECUTIONS_DATA_SAVE_ON_SUCCESS:-none}
+      EXECUTIONS_DATA_SAVE_ON_ERROR: ${EXECUTIONS_DATA_SAVE_ON_ERROR:-all}
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: ${EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS:-false}
+      EXECUTIONS_DATA_PRUNE_SOFT_DELETE_INTERVAL: ${EXECUTIONS_DATA_PRUNE_SOFT_DELETE_INTERVAL:-15}
+      EXECUTIONS_DATA_PRUNE_HARD_DELETE_INTERVAL: ${EXECUTIONS_DATA_PRUNE_HARD_DELETE_INTERVAL:-15}
+      N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+    expose:
+      - "5678"
+    ports:
+      - "127.0.0.1:5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('http').get('http://127.0.0.1:5678/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\"",
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - n8n_internal
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      n8n:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ${NGINX_CONF:-./nginx/nginx.conf}:/etc/nginx/nginx.conf:ro
+      - ./nginx/snippets/proxy-n8n.conf:/etc/nginx/snippets/proxy-n8n.conf:ro
+      - ${LETSENCRYPT_DIR:-./certs/letsencrypt}:/etc/letsencrypt:ro
+      - ${CERTBOT_WEBROOT:-./certs/certbot}:/var/www/certbot:ro
+    networks:
+      - n8n_internal
+
+  certbot:
+    image: certbot/certbot:v2.11.0
+    volumes:
+      - ${LETSENCRYPT_DIR:-./certs/letsencrypt}:/etc/letsencrypt
+      - ${CERTBOT_WEBROOT:-./certs/certbot}:/var/www/certbot
+    networks:
+      - n8n_internal
+
+networks:
+  n8n_internal:
+    driver: bridge
+
+volumes:
+  n8n_data:
