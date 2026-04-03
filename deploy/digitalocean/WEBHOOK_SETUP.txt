@@ -1,0 +1,33 @@
+Webhook hardening (minimum fix)
+================================
+
+1) VPS: edit deploy/digitalocean/.env (production, not committed)
+   - Set WEBHOOK_SHARED_SECRET to a long random value, e.g.:
+     openssl rand -hex 32
+
+2) Recreate n8n so env vars apply:
+   cd deploy/digitalocean
+   docker compose up -d --force-recreate n8n
+
+3) n8n UI: Workflows → Import from File →
+   workflows/webhook-secret-guard-template.json
+
+4) Copy the "Check secret header" + "Blocked?" + "Respond 401" pattern into
+   your real OCR/webhook workflow, OR change the template Webhook path and
+   replace "Respond OK (replace)" with your AI nodes + final Respond.
+
+5) Turn OFF (deactivate) any old webhook workflows that have no secret check.
+
+6) In your app or curl, send the header on every request:
+   X-Webhook-Secret: <same value as WEBHOOK_SHARED_SECRET>
+
+7) Rotate Gemini/Mistral (and any other) API keys once this is live.
+
+Nginx: /webhook/ rate limit stays in nginx/nginx.conf (and http-only.conf).
+
+What "secret header" means
+---------------------------
+Anyone on the internet can POST to a public URL. A secret header is a shared
+password sent only by your trusted client. Random bots do not know the value,
+so n8n returns 401 and never runs your AI nodes. It is not as strong as HMAC
+signatures, but it is the simplest fix and stops most abuse.

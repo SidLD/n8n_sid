@@ -23,6 +23,9 @@ services:
       N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL:-http://${N8N_HOST}}
       # Secure session cookies (default true). Plain http://SERVER_IP cannot log in unless you set false in .env (emergency only; prefer https://your-domain).
       N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE:-true}
+      # Allow Code node / $env to read WEBHOOK_SHARED_SECRET (self-hosted only; trusted admins).
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: ${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}
+      WEBHOOK_SHARED_SECRET: ${WEBHOOK_SHARED_SECRET:-}
       TZ: ${TZ:-UTC}
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
 
