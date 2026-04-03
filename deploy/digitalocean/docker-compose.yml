@@ -21,6 +21,8 @@ services:
       # Default http:// — on VPS set WEBHOOK_URL / N8N_EDITOR_BASE_URL to https://your-domain/
       WEBHOOK_URL: ${WEBHOOK_URL:-http://${N8N_HOST}/}
       N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL:-http://${N8N_HOST}}
+      # Secure session cookies (default true). Plain http://SERVER_IP cannot log in unless you set false in .env (emergency only; prefer https://your-domain).
+      N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE:-true}
       TZ: ${TZ:-UTC}
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
 
